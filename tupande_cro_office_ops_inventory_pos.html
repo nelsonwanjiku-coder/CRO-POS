@@ -1,0 +1,2325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tupande CRO — Office Ops & Inventory POS</title>
+  <!-- Google Fonts: Inter & JetBrains Mono for SKUs/Receipts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            tupande: {
+              dark: '#1B5E20',
+              primary: '#2E7D32',
+              light: '#E8F5E9',
+              mint: '#F0FDF4',
+              amber: '#D97706',
+              amberLight: '#FEF3C7',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    /* Base typography & smooth scrolling */
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: #F8FAFC;
+      color: #0F172A;
+    }
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+    /* Custom subtle scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+
+    /* Toast slide-in animation */
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .animate-toast {
+      animation: slideUp 0.22s ease-out forwards;
+    }
+
+    /* Print rules: Print ONLY the clean audit-ready receipt */
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #receipt-modal,
+      #receipt-print-area,
+      #receipt-print-area * {
+        visibility: visible !important;
+      }
+      #receipt-modal {
+        position: fixed !important;
+        inset: 0 !important;
+        background: #FFFFFF !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        display: block !important;
+        overflow: visible !important;
+      }
+      #receipt-modal-card {
+        box-shadow: none !important;
+        border: none !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      #receipt-print-area {
+        padding: 16px !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-900 antialiased">
+
+  <!-- ===================================================================== -->
+  <!-- TOP NAVIGATION BAR & LIVE KPI HEADER                                  -->
+  <!-- ===================================================================== -->
+  <header class="bg-[#1B5E20] text-white shadow-md sticky top-0 z-30 border-b border-emerald-900/40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Top Row: Brand, Live Clock, KPI Pills & Utilities -->
+      <div class="py-3 flex flex-wrap items-center justify-between gap-3 border-b border-white/15">
+        <!-- Brand Badge -->
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-white/15 border border-white/25 flex items-center justify-center shadow-inner shrink-0">
+            <!-- Sprout / Leaf Operations Emblem -->
+            <svg class="w-6 h-6 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M7 20h10" />
+              <path d="M10 20c5.5-2.5.8-6.4 3-10" />
+              <path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z" />
+              <path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z" />
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-base sm:text-lg font-bold tracking-tight text-white">Tupande CRO <span class="text-emerald-200 font-normal">|</span> Office Ops POS</h1>
+              <span class="hidden md:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/20 text-amber-200 border border-amber-400/30">
+                One Acre Fund
+              </span>
+            </div>
+            <p id="live-clock" class="text-xs text-emerald-100/90 tabular-nums mt-0.5">Loading operational clock...</p>
+          </div>
+        </div>
+
+        <!-- Quick KPI Pills & Utility Buttons -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- KPI 1: Low Stock Alerts -->
+          <button type="button" onclick="navigateToLowStock()" title="View Low Stock & Reorder Items"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-300/40 text-xs font-medium text-amber-100 transition cursor-pointer">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>Low Stock:</span>
+            <strong id="kpi-low-stock" class="text-white tabular-nums font-bold">0</strong>
+          </button>
+
+          <!-- KPI 2: Active Asset Loans -->
+          <button type="button" onclick="switchTab('custody')" title="View Active IT & Fixed Asset Custody"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-medium text-emerald-50 transition cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-emerald-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <path d="M8 21h8M12 17v4" />
+            </svg>
+            <span>Asset Loans:</span>
+            <strong id="kpi-active-loans" class="text-white tabular-nums font-bold">0</strong>
+          </button>
+
+          <!-- KPI 3: Today's Transactions -->
+          <button type="button" onclick="switchTab('audit')" title="View Today's Audit Transactions"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-medium text-emerald-50 transition cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-emerald-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Today's Txns:</span>
+            <strong id="kpi-today-txns" class="text-white tabular-nums font-bold">0</strong>
+          </button>
+
+          <!-- Publish Guide Button -->
+          <button type="button" onclick="openPublishModal()"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-900/60 hover:bg-emerald-900 border border-emerald-300/25 text-xs font-medium text-emerald-100 transition cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-amber-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            <span class="hidden sm:inline">Publish Guide</span>
+          </button>
+
+          <!-- Reset Demo Data Button -->
+          <button type="button" onclick="openConfirmModal('reset')"
+            class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-rose-600/80 border border-white/20 text-xs font-medium text-white/90 transition cursor-pointer"
+            title="Reset all data to initial Tupande CRO sample records">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span class="hidden md:inline">Reset Demo</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Bottom Row: Main Navigation Tabs -->
+      <nav class="flex items-center gap-1 overflow-x-auto py-2 no-scrollbar" aria-label="Primary Navigation">
+        <button type="button" data-tab="pos" onclick="switchTab('pos')"
+          class="nav-tab flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition cursor-pointer bg-white text-[#1B5E20] shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="M6 8h.01M10 8h.01M14 8h.01M6 12h12M6 16h8" />
+          </svg>
+          POS Terminal
+        </button>
+
+        <button type="button" data-tab="inventory" onclick="switchTab('inventory')"
+          class="nav-tab flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition cursor-pointer text-emerald-100 hover:bg-white/10">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          </svg>
+          Inventory &amp; Stock
+        </button>
+
+        <button type="button" data-tab="custody" onclick="switchTab('custody')"
+          class="nav-tab flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition cursor-pointer text-emerald-100 hover:bg-white/10">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          Asset Custody
+          <span id="nav-custody-badge" class="px-1.5 py-0.5 text-[11px] rounded-full bg-amber-500 text-white font-bold tabular-nums">0</span>
+        </button>
+
+        <button type="button" data-tab="audit" onclick="switchTab('audit')"
+          class="nav-tab flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition cursor-pointer text-emerald-100 hover:bg-white/10">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Audit Log &amp; Export
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- MAIN APPLICATION CONTENT AREA                                         -->
+  <!-- ===================================================================== -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- =================================================================== -->
+    <!-- TAB 1: POS TERMINAL                                                 -->
+    <!-- =================================================================== -->
+    <section id="tab-pos" class="tab-panel">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- LEFT COLUMN: CATALOG & QUICK SKU SCANNER (7 cols on lg) -->
+        <div class="lg:col-span-7 space-y-4">
+          <!-- Search & Barcode SKU Input Card -->
+          <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+              <!-- General Search -->
+              <div class="sm:col-span-7 relative">
+                <label for="pos-search" class="block text-xs font-semibold text-slate-600 mb-1">Search Catalog</label>
+                <div class="relative">
+                  <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
+                  </svg>
+                  <input id="pos-search" type="text" placeholder="Filter by item name or SKU..."
+                    oninput="renderPosCatalog()"
+                    class="w-full pl-9 pr-8 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2E7D32] focus:bg-white transition" />
+                  <button type="button" onclick="document.getElementById('pos-search').value=''; renderPosCatalog();"
+                    class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold px-1 cursor-pointer" title="Clear search">
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <!-- Quick SKU Barcode Input -->
+              <div class="sm:col-span-5">
+                <label for="pos-sku-scan" class="block text-xs font-semibold text-slate-600 mb-1">
+                  Quick SKU Scan <span class="text-amber-600 font-normal">(Press Enter)</span>
+                </label>
+                <div class="relative">
+                  <svg class="w-4 h-4 text-[#2E7D32] absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 8v8M11 8v8M15 8v8M18 8v8" />
+                  </svg>
+                  <input id="pos-sku-scan" type="text" placeholder="e.g. TPD-STN-001"
+                    onkeydown="handleQuickSkuScan(event)"
+                    class="w-full pl-9 pr-3 py-2.5 text-sm font-mono uppercase bg-emerald-50/50 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1B5E20] focus:bg-white transition" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Category Filter Pills -->
+            <div id="pos-category-pills" class="flex flex-wrap items-center gap-1.5 pt-1">
+              <!-- Rendered dynamically by JS -->
+            </div>
+          </div>
+
+          <!-- Catalog Item Grid -->
+          <div id="pos-catalog-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            <!-- Rendered dynamically by JS -->
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: ACTIVE POS ISSUANCE / RESTOCK SLIP (5 cols on lg) -->
+        <div class="lg:col-span-5 lg:sticky lg:top-28">
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <!-- Mode Switcher Header -->
+            <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3">
+              <div class="flex items-center justify-between">
+                <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-[#2E7D32]"></span>
+                  Active Operations Slip
+                </h2>
+                <button type="button" onclick="clearCart()"
+                  class="text-xs font-medium text-slate-500 hover:text-rose-600 transition cursor-pointer">
+                  Clear Slip
+                </button>
+              </div>
+
+              <!-- Issue vs Restock Toggle -->
+              <div class="grid grid-cols-2 gap-1.5 p-1 bg-slate-200/80 rounded-xl">
+                <button type="button" id="mode-btn-issue" onclick="setPosMode('ISSUE')"
+                  class="py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer bg-[#1B5E20] text-white shadow-sm">
+                  Issue / Check-Out (-)
+                </button>
+                <button type="button" id="mode-btn-restock" onclick="setPosMode('RESTOCK')"
+                  class="py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer text-slate-700 hover:text-slate-900">
+                  Stock Restock (+)
+                </button>
+              </div>
+            </div>
+
+            <!-- Recipient / Metadata Form -->
+            <div class="p-4 border-b border-slate-200 space-y-3 bg-white">
+              <div>
+                <label id="slip-recipient-label" for="slip-recipient" class="block text-xs font-semibold text-slate-700 mb-1">
+                  Recipient / Staff Member Name <span class="text-rose-500">*</span>
+                </label>
+                <input id="slip-recipient" type="text" placeholder="e.g. Wanjiku Kamau or Vendor Name"
+                  class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2E7D32]" />
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label for="slip-department" class="block text-xs font-semibold text-slate-700 mb-1">Department / Unit</label>
+                  <select id="slip-department"
+                    class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D32]">
+                    <option value="Field Operations">Field Operations</option>
+                    <option value="Corporate Ops (CRO)">Corporate Ops (CRO)</option>
+                    <option value="HR & People">HR &amp; People</option>
+                    <option value="Finance & Audit">Finance &amp; Audit</option>
+                    <option value="IT Support">IT Support</option>
+                    <option value="Facilities / Casual Staff">Facilities / Casual Staff</option>
+                    <option value="Visitor / Event">Visitor / Event</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label id="slip-ref-label" for="slip-reference" class="block text-xs font-semibold text-slate-700 mb-1">Reference / LPO / Desk Note</label>
+                  <input id="slip-reference" type="text" placeholder="e.g. Desk B4 / Onboarding"
+                    class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2E7D32]" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Cart Items List -->
+            <div id="pos-cart-list" class="p-4 max-h-[340px] overflow-y-auto divide-y divide-slate-100">
+              <!-- Rendered dynamically by JS -->
+            </div>
+
+            <!-- Totals & Complete Transaction Footer -->
+            <div class="p-4 bg-slate-50 border-t border-slate-200 space-y-3">
+              <div class="flex items-center justify-between text-xs text-slate-600">
+                <span>Total Line Items / Units:</span>
+                <span id="cart-total-units" class="font-semibold text-slate-800 tabular-nums">0 items (0 units)</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-bold text-slate-800">Total Valuation:</span>
+                <span id="cart-total-kes" class="text-lg font-extrabold text-[#1B5E20] tabular-nums">KES 0</span>
+              </div>
+
+              <button type="button" onclick="completePosTransaction()"
+                class="w-full py-3 px-4 rounded-xl bg-[#1B5E20] hover:bg-[#2E7D32] active:scale-[0.99] text-white font-bold text-sm shadow-sm transition flex items-center justify-center gap-2 cursor-pointer">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Complete &amp; Generate Receipt</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 2: INVENTORY & STOCK                                            -->
+    <!-- =================================================================== -->
+    <section id="tab-inventory" class="tab-panel hidden space-y-5">
+      <!-- Summary Banner -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Catalog SKUs</p>
+          <p id="inv-stat-skus" class="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">0</p>
+          <p class="text-xs text-slate-500 mt-1">Consumables &amp; Fixed Assets</p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">On-Hand Stock Value</p>
+          <p id="inv-stat-value" class="text-2xl font-extrabold text-[#1B5E20] tabular-nums mt-1">KES 0</p>
+          <p class="text-xs text-slate-500 mt-1">Current warehouse valuation</p>
+        </div>
+
+        <div class="bg-amber-50/70 rounded-2xl border border-amber-200 p-4 shadow-sm">
+          <p class="text-xs font-semibold text-amber-800 uppercase tracking-wider">Below Par Level (Reorder)</p>
+          <p id="inv-stat-low" class="text-2xl font-extrabold text-amber-700 tabular-nums mt-1">0</p>
+          <p class="text-xs text-amber-700/80 mt-1">At or below 25% buffer threshold</p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Out of Stock SKUs</p>
+          <p id="inv-stat-out" class="text-2xl font-extrabold text-rose-600 tabular-nums mt-1">0</p>
+          <p class="text-xs text-slate-500 mt-1">Immediate procurement needed</p>
+        </div>
+      </div>
+
+      <!-- Inventory Controls & Filters -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Toggle Filter: All vs Low Stock -->
+          <div class="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200">
+            <button type="button" id="inv-filter-all" onclick="setInventoryFilter('ALL')"
+              class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-900 shadow-sm transition cursor-pointer">
+              Show All Items
+            </button>
+            <button type="button" id="inv-filter-low" onclick="setInventoryFilter('LOW')"
+              class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition cursor-pointer">
+              Low Stock / Reorder List Only
+            </button>
+          </div>
+
+          <!-- Search Input -->
+          <input id="inv-search" type="text" placeholder="Search SKU, name, category..."
+            oninput="renderInventoryTable()"
+            class="px-3 py-2 text-xs sm:text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D32] w-56 sm:w-64" />
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" onclick="exportReorderCsv()"
+            class="px-3.5 py-2 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+            <svg class="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export Reorder List (CSV)
+          </button>
+
+          <button type="button" onclick="openAddItemModal()"
+            class="px-4 py-2 rounded-xl bg-[#1B5E20] hover:bg-[#2E7D32] text-white text-xs font-bold shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path d="M12 4v16m8-8H4" />
+            </svg>
+            Add New Item
+          </button>
+        </div>
+      </div>
+
+      <!-- Inventory Table -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th class="py-3.5 px-4">SKU &amp; Type</th>
+                <th class="py-3.5 px-4">Item Description</th>
+                <th class="py-3.5 px-4">Category</th>
+                <th class="py-3.5 px-4">Stock vs Par Level</th>
+                <th class="py-3.5 px-4 text-right">Unit Cost</th>
+                <th class="py-3.5 px-4 text-right">Stock Value</th>
+                <th class="py-3.5 px-4 text-right">Quick Action</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-table-body" class="divide-y divide-slate-100 text-sm">
+              <!-- Rendered dynamically by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 3: ASSET CUSTODY (IT & FIXED ASSETS CHAIN-OF-CUSTODY)           -->
+    <!-- =================================================================== -->
+    <section id="tab-custody" class="tab-panel hidden space-y-5">
+      <!-- Header Banner -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900">IT &amp; Fixed Assets Chain-of-Custody</h2>
+          <p class="text-xs sm:text-sm text-slate-600 mt-0.5">
+            Track laptops, monitors, MiFi routers, projectors, and equipment issued to Tupande staff or field teams.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-right">
+            <span class="block text-[11px] font-semibold text-emerald-800 uppercase">Active Loans</span>
+            <span id="custody-active-count" class="text-lg font-extrabold text-[#1B5E20] tabular-nums">0</span>
+          </div>
+          <div class="px-4 py-2 rounded-xl bg-amber-50 border border-amber-200 text-right">
+            <span class="block text-[11px] font-semibold text-amber-800 uppercase">Deployed Value</span>
+            <span id="custody-active-value" class="text-lg font-extrabold text-amber-700 tabular-nums">KES 0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <input id="custody-search" type="text" placeholder="Search by staff member, asset name, tag, or department..."
+          oninput="renderCustodyTable()"
+          class="px-3.5 py-2 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D32] w-full sm:w-96" />
+
+        <div class="flex items-center gap-2 text-xs text-slate-500">
+          <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+          <span>Returning an asset automatically restores +1 unit to available stock &amp; logs an audit entry.</span>
+        </div>
+      </div>
+
+      <!-- Active Asset Loans Table -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Currently Checked-Out Assets</h3>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/70 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th class="py-3 px-4">Loan ID &amp; Asset Tag</th>
+                <th class="py-3 px-4">Asset Name &amp; SKU</th>
+                <th class="py-3 px-4">Checked Out To</th>
+                <th class="py-3 px-4">Department</th>
+                <th class="py-3 px-4">Date Issued</th>
+                <th class="py-3 px-4">Reference / Desk Note</th>
+                <th class="py-3 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="custody-active-body" class="divide-y divide-slate-100 text-sm">
+              <!-- Rendered dynamically by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recently Returned Assets History -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-600">Returned Asset Clearance History</h3>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/70 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th class="py-3 px-4">Loan ID &amp; Tag</th>
+                <th class="py-3 px-4">Asset Name</th>
+                <th class="py-3 px-4">Returned By</th>
+                <th class="py-3 px-4">Issued Date</th>
+                <th class="py-3 px-4">Returned Date &amp; Condition</th>
+              </tr>
+            </thead>
+            <tbody id="custody-returned-body" class="divide-y divide-slate-100 text-xs text-slate-600">
+              <!-- Rendered dynamically by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 4: AUDIT LOG & EXPORT                                           -->
+    <!-- =================================================================== -->
+    <section id="tab-audit" class="tab-panel hidden space-y-5">
+      <!-- Audit Controls & Export Bar -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <input id="audit-search" type="text" placeholder="Search TXN ID, recipient, item, or reference..."
+            oninput="renderAuditTable()"
+            class="px-3.5 py-2 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D32] w-64 sm:w-72" />
+
+          <select id="audit-mode-filter" onchange="renderAuditTable()"
+            class="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D32]">
+            <option value="ALL">All Transaction Modes</option>
+            <option value="ISSUE">Issuances / Check-Outs (-)</option>
+            <option value="RESTOCK">Stock Restocks (+)</option>
+            <option value="ASSET_RETURN">Asset Returns</option>
+          </select>
+        </div>
+
+        <!-- Export & Backup Buttons -->
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" onclick="exportAuditCsv()"
+            class="px-3.5 py-2 rounded-xl bg-[#1B5E20] hover:bg-[#2E7D32] text-white text-xs font-bold shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export Full Audit Log (CSV)
+          </button>
+
+          <button type="button" onclick="exportBackupJson()"
+            class="px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+            <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export Backup (JSON)
+          </button>
+
+          <button type="button" onclick="document.getElementById('import-json-input').click()"
+            class="px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+            <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Import Backup (JSON)
+          </button>
+          <input id="import-json-input" type="file" accept=".json" class="hidden" onchange="importBackupJson(event)" />
+        </div>
+      </div>
+
+      <!-- Audit Ledger Table -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th class="py-3.5 px-4">Transaction ID</th>
+                <th class="py-3.5 px-4">Date &amp; Time</th>
+                <th class="py-3.5 px-4">Mode</th>
+                <th class="py-3.5 px-4">Recipient / Vendor</th>
+                <th class="py-3.5 px-4">Department</th>
+                <th class="py-3.5 px-4">Items Summary</th>
+                <th class="py-3.5 px-4 text-right">Value (KES)</th>
+                <th class="py-3.5 px-4 text-right">Voucher</th>
+              </tr>
+            </thead>
+            <tbody id="audit-table-body" class="divide-y divide-slate-100 text-sm">
+              <!-- Rendered dynamically by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 1: PRINTABLE AUDIT-READY ISSUANCE / RESTOCK RECEIPT MODAL       -->
+  <!-- ===================================================================== -->
+  <div id="receipt-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div id="receipt-modal-card" class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden my-auto">
+      <!-- Top Action Bar (Hidden on Print) -->
+      <div class="no-print px-6 py-3.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-600">Audit-Ready Operational Voucher</span>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="window.print()"
+            class="px-4 py-2 rounded-xl bg-[#1B5E20] hover:bg-[#2E7D32] text-white text-xs font-bold shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Print / Save as PDF
+          </button>
+          <button type="button" onclick="closeReceiptModal()"
+            class="px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition cursor-pointer">
+            Close
+          </button>
+        </div>
+      </div>
+
+      <!-- Printable Receipt Content -->
+      <div id="receipt-print-area" class="p-6 sm:p-8 space-y-6 bg-white">
+        <!-- Letterhead -->
+        <div class="flex flex-wrap items-start justify-between gap-4 border-b-2 border-[#1B5E20] pb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="inline-block w-3 h-3 rounded-xs bg-[#1B5E20]"></span>
+              <h2 class="text-xl font-extrabold text-[#1B5E20] tracking-tight">TUPANDE — ONE ACRE FUND</h2>
+            </div>
+            <p class="text-xs font-semibold text-slate-600 mt-0.5">Corporate Operations (CRO) • Office Administration &amp; Inventory Control</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Audit-Ready Chain-of-Custody &amp; Stock Movement Record</p>
+          </div>
+          <div class="text-left sm:text-right">
+            <span id="rcpt-mode-badge" class="inline-block px-2.5 py-1 rounded-md text-xs font-extrabold uppercase tracking-wider bg-emerald-100 text-[#1B5E20]">
+              ISSUANCE / CHECK-OUT
+            </span>
+            <p id="rcpt-txn-id" class="font-mono text-sm font-bold text-slate-900 mt-1.5">TXN-2026-0000</p>
+            <p id="rcpt-date" class="text-xs text-slate-500 tabular-nums">20 Nov 2026, 12:32 PM</p>
+          </div>
+        </div>
+
+        <!-- Metadata Details -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+          <div>
+            <span class="block text-[10px] font-bold uppercase text-slate-400">Recipient / Vendor</span>
+            <strong id="rcpt-recipient" class="text-sm font-bold text-slate-900">—</strong>
+          </div>
+          <div>
+            <span class="block text-[10px] font-bold uppercase text-slate-400">Department / Unit</span>
+            <strong id="rcpt-department" class="text-sm font-semibold text-slate-800">—</strong>
+          </div>
+          <div>
+            <span class="block text-[10px] font-bold uppercase text-slate-400">Reference / LPO / Desk Note</span>
+            <strong id="rcpt-reference" class="text-sm font-semibold text-slate-800">—</strong>
+          </div>
+        </div>
+
+        <!-- Itemized Table -->
+        <div class="border border-slate-200 rounded-xl overflow-hidden">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="bg-slate-100 border-b border-slate-200 font-bold text-slate-700 uppercase">
+                <th class="py-2.5 px-3">SKU</th>
+                <th class="py-2.5 px-3">Item Description</th>
+                <th class="py-2.5 px-3 text-center">Qty</th>
+                <th class="py-2.5 px-3 text-right">Unit Cost</th>
+                <th class="py-2.5 px-3 text-right">Total (KES)</th>
+              </tr>
+            </thead>
+            <tbody id="rcpt-items-body" class="divide-y divide-slate-200">
+              <!-- Populated dynamically -->
+            </tbody>
+            <tfoot>
+              <tr class="bg-slate-50 border-t-2 border-slate-300 font-bold text-slate-900">
+                <td colspan="2" class="py-2.5 px-3 text-right uppercase text-[11px] text-slate-600">Total Summary</td>
+                <td id="rcpt-total-qty" class="py-2.5 px-3 text-center tabular-nums">0</td>
+                <td class="py-2.5 px-3 text-right text-slate-400">—</td>
+                <td id="rcpt-total-kes" class="py-2.5 px-3 text-right text-sm font-extrabold text-[#1B5E20] tabular-nums">KES 0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- Compliance Notice -->
+        <p id="rcpt-compliance-note" class="text-[11px] text-slate-500 leading-relaxed bg-amber-50/60 border border-amber-200/80 rounded-xl p-3">
+          <strong>Audit &amp; Custody Declaration:</strong> By signing below, the recipient confirms receipt of the listed items in good working condition. Any Fixed/IT Assets remain the property of Tupande (One Acre Fund) and must be returned to Corporate Operations upon role transfer, project completion, or offboarding.
+        </p>
+
+        <!-- Signature Lines -->
+        <div class="grid grid-cols-2 gap-8 pt-6">
+          <div>
+            <div class="border-b border-slate-400 h-8"></div>
+            <p class="text-xs font-bold text-slate-800 mt-1.5">Issued / Verified By (Office Admin)</p>
+            <p class="text-[11px] text-slate-500">Signature &amp; Date • Corporate Operations</p>
+          </div>
+          <div>
+            <div class="border-b border-slate-400 h-8"></div>
+            <p id="rcpt-sign-recipient" class="text-xs font-bold text-slate-800 mt-1.5">Received By (Staff / Vendor)</p>
+            <p class="text-[11px] text-slate-500">Signature &amp; Date • ID / Staff No.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 2: ADD NEW INVENTORY ITEM MODAL                                 -->
+  <!-- ===================================================================== -->
+  <div id="add-item-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full overflow-hidden">
+      <div class="px-6 py-4 bg-[#1B5E20] text-white flex items-center justify-between">
+        <h3 class="text-base font-bold">Add New Catalog Item</h3>
+        <button type="button" onclick="closeAddItemModal()" class="text-white/80 hover:text-white text-sm font-bold cursor-pointer">✕</button>
+      </div>
+
+      <form id="add-item-form" onsubmit="handleAddNewItem(event)" class="p-6 space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label for="new-item-sku" class="block text-xs font-semibold text-slate-700 mb-1">SKU / Item Code *</label>
+            <input id="new-item-sku" type="text" required placeholder="e.g. TPD-STN-006"
+              class="w-full px-3 py-2 text-sm font-mono uppercase border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2E7D32]" />
+          </div>
+
+          <div>
+            <label for="new-item-category" class="block text-xs font-semibold text-slate-700 mb-1">Category *</label>
+            <select id="new-item-category"
+              class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D32]">
+              <option value="Stationery & Print">Stationery &amp; Print</option>
+              <option value="Pantry & Hygiene">Pantry &amp; Hygiene</option>
+              <option value="IT & Fixed Assets">IT &amp; Fixed Assets</option>
+              <option value="Facilities & Safety">Facilities &amp; Safety</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label for="new-item-name" class="block text-xs font-semibold text-slate-700 mb-1">Item Name &amp; Specification *</label>
+          <input id="new-item-name" type="text" required placeholder="e.g. Whiteboard Markers (Box of 12)"
+            class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2E7D32]" />
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label for="new-item-unit" class="block text-xs font-semibold text-slate-700 mb-1">Unit *</label>
+            <input id="new-item-unit" type="text" required value="Unit" placeholder="Box / Ream"
+              class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2E7D32]" />
+          </div>
+          <div>
+            <label for="new-item-stock" class="block text-xs font-semibold text-slate-700 mb-1">Initial Stock *</label>
+            <input id="new-item-stock" type="number" min="0" required value="10"
+              class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2E7D32]" />
+          </div>
+          <div>
+            <label for="new-item-par" class="block text-xs font-semibold text-slate-700 mb-1">Par Level *</label>
+            <input id="new-item-par" type="number" min="0" required value="4"
+              class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2E7D32]" />
+          </div>
+          <div>
+            <label for="new-item-cost" class="block text-xs font-semibold text-slate-700 mb-1">Unit Cost (KES) *</label>
+            <input id="new-item-cost" type="number" min="0" required value="500"
+              class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2E7D32]" />
+          </div>
+        </div>
+
+        <label class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+          <input id="new-item-asset" type="checkbox" class="mt-0.5 rounded text-[#1B5E20] focus:ring-[#2E7D32]" />
+          <span class="text-xs text-slate-700">
+            <strong class="block text-slate-900">Track as Fixed / Returnable Asset</strong>
+            Checking this automatically creates a Chain-of-Custody loan record whenever the item is checked out to staff.
+          </span>
+        </label>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" onclick="closeAddItemModal()"
+            class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
+            Cancel
+          </button>
+          <button type="submit"
+            class="px-4 py-2 rounded-xl bg-[#1B5E20] hover:bg-[#2E7D32] text-white text-xs font-bold shadow-sm cursor-pointer">
+            Save Item to Catalog
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 3: QUICK INLINE RESTOCK MODAL                                   -->
+  <!-- ===================================================================== -->
+  <div id="quick-restock-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full overflow-hidden">
+      <div class="px-6 py-4 bg-amber-600 text-white flex items-center justify-between">
+        <h3 class="text-base font-bold">Quick Stock Replenishment (+)</h3>
+        <button type="button" onclick="closeQuickRestockModal()" class="text-white/80 hover:text-white text-sm font-bold cursor-pointer">✕</button>
+      </div>
+      <form onsubmit="submitQuickRestock(event)" class="p-6 space-y-4">
+        <input type="hidden" id="qr-item-id" />
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+          <p id="qr-item-sku" class="font-mono text-xs text-slate-500">SKU</p>
+          <p id="qr-item-name" class="text-sm font-bold text-slate-900 mt-0.5">Item Name</p>
+          <p id="qr-item-current" class="text-xs text-slate-600 mt-1">Current Stock: 0</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="qr-qty" class="block text-xs font-semibold text-slate-700 mb-1">Quantity Received *</label>
+            <input id="qr-qty" type="number" min="1" required value="10"
+              class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-600" />
+          </div>
+          <div>
+            <label for="qr-vendor" class="block text-xs font-semibold text-slate-700 mb-1">Supplier / Vendor *</label>
+            <input id="qr-vendor" type="text" required value="Approved Frame Vendor"
+              class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-600" />
+          </div>
+        </div>
+
+        <div>
+          <label for="qr-ref" class="block text-xs font-semibold text-slate-700 mb-1">LPO / Delivery Note / eTIMS Ref</label>
+          <input id="qr-ref" type="text" placeholder="e.g. LPO-2026-412 / GRN-09"
+            class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-600" />
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeQuickRestockModal()"
+            class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
+            Cancel
+          </button>
+          <button type="submit"
+            class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm cursor-pointer">
+            Confirm Restock &amp; Log
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 4: CUSTOM CONFIRMATION MODAL (REPLACES window.confirm)          -->
+  <!-- ===================================================================== -->
+  <div id="confirm-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4">
+      <div class="flex items-start gap-3">
+        <div id="confirm-icon-wrap" class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <div>
+          <h3 id="confirm-title" class="text-base font-bold text-slate-900">Confirm Action</h3>
+          <p id="confirm-message" class="text-xs text-slate-600 mt-1 leading-relaxed">Are you sure you want to proceed?</p>
+        </div>
+      </div>
+
+      <!-- Optional condition note input (used when returning a fixed asset) -->
+      <div id="confirm-note-wrap" class="hidden">
+        <label for="confirm-note-input" class="block text-xs font-semibold text-slate-700 mb-1">Return Condition / Clearance Note</label>
+        <input id="confirm-note-input" type="text" value="Good working condition, accessories verified"
+          class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2E7D32]" />
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="closeConfirmModal()"
+          class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
+          Cancel
+        </button>
+        <button type="button" id="confirm-proceed-btn"
+          class="px-4 py-2 rounded-xl bg-[#1B5E20] hover:bg-[#2E7D32] text-white text-xs font-bold shadow-sm cursor-pointer">
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 5: HOW TO PUBLISH & DEPLOY GUIDE MODAL                          -->
+  <!-- ===================================================================== -->
+  <div id="publish-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden my-auto">
+      <div class="px-6 py-4 bg-[#1B5E20] text-white flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold">How to Publish &amp; Share This POS Tool</h3>
+          <p class="text-xs text-emerald-100">Zero-backend single-file architecture — deploy in under 2 minutes</p>
+        </div>
+        <button type="button" onclick="closePublishModal()" class="text-white/80 hover:text-white text-sm font-bold cursor-pointer">✕</button>
+      </div>
+
+      <div class="p-6 space-y-4 text-xs sm:text-sm text-slate-700 max-h-[75vh] overflow-y-auto">
+        <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950">
+          <strong>Option 1: Offline / Local Office PC (Immediate Use)</strong>
+          <p class="text-xs mt-1">Save this file as <code class="font-mono bg-white px-1.5 py-0.5 rounded border">tupande-cro-pos.html</code> on your office desktop. Double-click to open in Chrome, Edge, or Brave—works 100% offline with automatic browser storage and JSON backups.</p>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+          <strong class="text-slate-900">Option 2: Netlify Drop (Fastest Free Web URL — 30 Seconds)</strong>
+          <ol class="list-decimal list-inside text-xs space-y-1 mt-1.5 text-slate-600">
+            <li>Place <code class="font-mono bg-white px-1 rounded border">index.html</code> (renamed from this file) inside a new folder.</li>
+            <li>Visit <strong>app.netlify.com/drop</strong> in your browser.</li>
+            <li>Drag and drop the folder onto the page to get an instant live HTTPS link to bookmark across office devices.</li>
+          </ol>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+          <strong class="text-slate-900">Option 3: GitHub Pages (Permanent Team Hosting)</strong>
+          <ol class="list-decimal list-inside text-xs space-y-1 mt-1.5 text-slate-600">
+            <li>Create a GitHub repository (e.g., <code class="font-mono bg-white px-1 rounded border">tupande-cro-pos</code>) and upload this file as <code class="font-mono bg-white px-1 rounded border">index.html</code>.</li>
+            <li>Go to <strong>Settings → Pages</strong>, select the <code class="font-mono">main</code> branch, and click <strong>Save</strong>.</li>
+            <li>Your POS goes live at <code class="font-mono text-[#1B5E20]">https://&lt;username&gt;.github.io/tupande-cro-pos/</code>.</li>
+          </ol>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-950 text-xs">
+          <strong>Multi-Device Tip:</strong> Because data is stored locally in each browser for speed and offline reliability, use the <strong>Export Backup (JSON)</strong> and <strong>Import Backup (JSON)</strong> buttons in the <em>Audit Log &amp; Export</em> tab whenever transferring records between office computers.
+        </div>
+      </div>
+
+      <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <button type="button" onclick="closePublishModal()"
+          class="px-4 py-2 rounded-xl bg-[#1B5E20] hover:bg-[#2E7D32] text-white text-xs font-bold cursor-pointer">
+          Got It
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TOAST NOTIFICATION CONTAINER                                          -->
+  <!-- ===================================================================== -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- ===================================================================== -->
+  <!-- APPLICATION JAVASCRIPT                                                -->
+  <!-- ===================================================================== -->
+  <script>
+    /*************************************************************************
+     * 1. STATE MANAGEMENT & REALISTIC TUPANDE CRO DEMO SEED DATA
+     *************************************************************************/
+    const STORAGE_KEYS = {
+      INVENTORY: 'tupande_cro_pos_v1_inventory',
+      LOANS: 'tupande_cro_pos_v1_loans',
+      TRANSACTIONS: 'tupande_cro_pos_v1_transactions',
+    };
+
+    const CATEGORIES = [
+      'All',
+      'Stationery & Print',
+      'Pantry & Hygiene',
+      'IT & Fixed Assets',
+      'Facilities & Safety'
+    ];
+
+    function getSeedInventory() {
+      return [
+        // Stationery & Print
+        { id: 'itm-01', sku: 'TPD-STN-001', name: 'A4 Printing Paper (80gsm Ream)', category: 'Stationery & Print', unit: 'Ream', stock: 24, parLevel: 10, unitCost: 850, isFixedAsset: false },
+        { id: 'itm-02', sku: 'TPD-STN-002', name: 'Ballpoint Pens (Box of 50 - Blue)', category: 'Stationery & Print', unit: 'Box', stock: 4, parLevel: 6, unitCost: 650, isFixedAsset: false },
+        { id: 'itm-03', sku: 'TPD-STN-003', name: 'Spiral Field Notebooks (A5 Hardcover)', category: 'Stationery & Print', unit: 'Pack (5)', stock: 18, parLevel: 8, unitCost: 1200, isFixedAsset: false },
+        { id: 'itm-04', sku: 'TPD-STN-004', name: 'HP 58A Black LaserJet Toner Cartridge', category: 'Stationery & Print', unit: 'Unit', stock: 2, parLevel: 3, unitCost: 11500, isFixedAsset: false },
+        { id: 'itm-05', sku: 'TPD-STN-005', name: 'A4 Lamination Pouches (100 Pack)', category: 'Stationery & Print', unit: 'Pack', stock: 9, parLevel: 4, unitCost: 1450, isFixedAsset: false },
+
+        // Pantry & Hygiene
+        { id: 'itm-06', sku: 'TPD-PNT-001', name: '20L Refillable Drinking Water Bottle', category: 'Pantry & Hygiene', unit: 'Bottle', stock: 14, parLevel: 8, unitCost: 450, isFixedAsset: false },
+        { id: 'itm-07', sku: 'TPD-PNT-002', name: 'Kenyan AA Tea Leaves & Coffee Set', category: 'Pantry & Hygiene', unit: 'Set', stock: 7, parLevel: 5, unitCost: 1800, isFixedAsset: false },
+        { id: 'itm-08', sku: 'TPD-PNT-003', name: 'Liquid Handwash & Sanitizer (5L)', category: 'Pantry & Hygiene', unit: 'Jerrycan', stock: 2, parLevel: 4, unitCost: 1650, isFixedAsset: false },
+        { id: 'itm-09', sku: 'TPD-PNT-004', name: 'Jumbo Toilet Tissue Rolls (Bale of 12)', category: 'Pantry & Hygiene', unit: 'Bale', stock: 11, parLevel: 5, unitCost: 1350, isFixedAsset: false },
+        { id: 'itm-10', sku: 'TPD-PNT-005', name: 'Multipurpose Surface Disinfectant (5L)', category: 'Pantry & Hygiene', unit: 'Jerrycan', stock: 6, parLevel: 3, unitCost: 1100, isFixedAsset: false },
+
+        // IT & Fixed Assets
+        { id: 'itm-11', sku: 'TPD-IT-001', name: 'Dell Latitude 5440 Laptop (16GB RAM)', category: 'IT & Fixed Assets', unit: 'Unit', stock: 3, parLevel: 2, unitCost: 98000, isFixedAsset: true },
+        { id: 'itm-12', sku: 'TPD-IT-002', name: 'Dell 24" IPS External Monitor (P2422H)', category: 'IT & Fixed Assets', unit: 'Unit', stock: 5, parLevel: 2, unitCost: 26500, isFixedAsset: true },
+        { id: 'itm-13', sku: 'TPD-IT-003', name: 'Safaricom 4G+ Portable MiFi Router', category: 'IT & Fixed Assets', unit: 'Unit', stock: 4, parLevel: 3, unitCost: 6800, isFixedAsset: true },
+        { id: 'itm-14', sku: 'TPD-IT-004', name: 'Epson EB-X51 Conference Projector', category: 'IT & Fixed Assets', unit: 'Unit', stock: 2, parLevel: 1, unitCost: 54000, isFixedAsset: true },
+        { id: 'itm-15', sku: 'TPD-IT-005', name: 'Logitech Wireless Presenter Clicker', category: 'IT & Fixed Assets', unit: 'Unit', stock: 0, parLevel: 2, unitCost: 4200, isFixedAsset: true },
+
+        // Facilities & Safety
+        { id: 'itm-16', sku: 'TPD-FAC-001', name: 'OSHA Office First-Aid Refill Kit', category: 'Facilities & Safety', unit: 'Kit', stock: 4, parLevel: 2, unitCost: 4800, isFixedAsset: false },
+        { id: 'itm-17', sku: 'TPD-FAC-002', name: 'Visitor Lanyard & PVC Badge Set (20)', category: 'Facilities & Safety', unit: 'Pack', stock: 3, parLevel: 4, unitCost: 1900, isFixedAsset: false },
+        { id: 'itm-18', sku: 'TPD-FAC-003', name: 'Heavy-Duty 6-Way Surge Extension', category: 'Facilities & Safety', unit: 'Unit', stock: 7, parLevel: 3, unitCost: 2400, isFixedAsset: true },
+      ];
+    }
+
+    function getSeedLoans() {
+      const now = new Date();
+      const yesterday = new Date(now.getTime() - 86400000);
+      const threeDaysAgo = new Date(now.getTime() - 3 * 86400000);
+
+      return [
+        {
+          loanId: 'LN-2026-101',
+          itemId: 'itm-11',
+          sku: 'TPD-IT-001',
+          assetName: 'Dell Latitude 5440 Laptop (16GB RAM)',
+          assetTag: 'TAG-KKG-0418',
+          recipient: 'Mercy Wanjiku',
+          department: 'Field Operations',
+          issuedAt: threeDaysAgo.toISOString(),
+          reference: 'New Hire Onboarding - Kakamega Hub',
+          unitCost: 98000,
+          status: 'ACTIVE',
+          returnedAt: null,
+          returnNote: null
+        },
+        {
+          loanId: 'LN-2026-102',
+          itemId: 'itm-13',
+          sku: 'TPD-IT-003',
+          assetName: 'Safaricom 4G+ Portable MiFi Router',
+          assetTag: 'TAG-KKG-0192',
+          recipient: 'Brian Ochieng',
+          department: 'Corporate Ops (CRO)',
+          issuedAt: yesterday.toISOString(),
+          reference: 'Bungoma Field Audit Trip',
+          unitCost: 6800,
+          status: 'ACTIVE',
+          returnedAt: null,
+          returnNote: null
+        },
+        {
+          loanId: 'LN-2026-103',
+          itemId: 'itm-14',
+          sku: 'TPD-IT-004',
+          assetName: 'Epson EB-X51 Conference Projector',
+          assetTag: 'TAG-KKG-0087',
+          recipient: 'Faith Chebet',
+          department: 'HR & People',
+          issuedAt: now.toISOString(),
+          reference: 'Q4 Field Officer Induction Workshop',
+          unitCost: 54000,
+          status: 'ACTIVE',
+          returnedAt: null,
+          returnNote: null
+        }
+      ];
+    }
+
+    function getSeedTransactions() {
+      const now = new Date();
+      const earlierToday = new Date(now.getTime() - 2 * 3600000);
+      const yesterday = new Date(now.getTime() - 26 * 3600000);
+
+      return [
+        {
+          txnId: 'TXN-2026-8410',
+          timestamp: earlierToday.toISOString(),
+          mode: 'ISSUE',
+          recipient: 'Faith Chebet',
+          department: 'HR & People',
+          reference: 'Q4 Field Officer Induction Workshop',
+          items: [
+            { sku: 'TPD-IT-004', name: 'Epson EB-X51 Conference Projector', unit: 'Unit', qty: 1, unitCost: 54000, assetTag: 'TAG-KKG-0087', isFixedAsset: true },
+            { sku: 'TPD-STN-003', name: 'Spiral Field Notebooks (A5 Hardcover)', unit: 'Pack (5)', qty: 3, unitCost: 1200, assetTag: '', isFixedAsset: false }
+          ],
+          totalQty: 4,
+          totalValue: 57600
+        },
+        {
+          txnId: 'TXN-2026-8402',
+          timestamp: yesterday.toISOString(),
+          mode: 'RESTOCK',
+          recipient: 'Text Book Centre Ltd',
+          department: 'Corporate Ops (CRO)',
+          reference: 'LPO-2026-088 / eTIMS-9921',
+          items: [
+            { sku: 'TPD-STN-001', name: 'A4 Printing Paper (80gsm Ream)', unit: 'Ream', qty: 20, unitCost: 850, assetTag: '', isFixedAsset: false }
+          ],
+          totalQty: 20,
+          totalValue: 17000
+        }
+      ];
+    }
+
+    // Application Runtime State
+    let appState = {
+      inventory: [],
+      loans: [],
+      transactions: [],
+      activeTab: 'pos',
+      posCategory: 'All',
+      posMode: 'ISSUE', // 'ISSUE' or 'RESTOCK'
+      cart: [], // { itemId, sku, name, unit, unitCost, qty, isFixedAsset, assetTag }
+      inventoryFilter: 'ALL', // 'ALL' or 'LOW'
+    };
+
+    /*************************************************************************
+     * 2. INITIALIZATION & STORAGE PERSISTENCE
+     *************************************************************************/
+    function loadStateFromStorage() {
+      try {
+        const rawInv = localStorage.getItem(STORAGE_KEYS.INVENTORY);
+        const rawLoans = localStorage.getItem(STORAGE_KEYS.LOANS);
+        const rawTxns = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
+
+        appState.inventory = rawInv ? JSON.parse(rawInv) : getSeedInventory();
+        appState.loans = rawLoans ? JSON.parse(rawLoans) : getSeedLoans();
+        appState.transactions = rawTxns ? JSON.parse(rawTxns) : getSeedTransactions();
+
+        if (!rawInv || !rawLoans || !rawTxns) {
+          saveStateToStorage();
+        }
+      } catch (err) {
+        console.error('Failed to read localStorage, falling back to demo data:', err);
+        appState.inventory = getSeedInventory();
+        appState.loans = getSeedLoans();
+        appState.transactions = getSeedTransactions();
+      }
+    }
+
+    function saveStateToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(appState.inventory));
+        localStorage.setItem(STORAGE_KEYS.LOANS, JSON.stringify(appState.loans));
+        localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(appState.transactions));
+      } catch (err) {
+        showToast('Warning: Unable to save changes to browser storage.', 'error');
+      }
+    }
+
+    function resetDemoData() {
+      appState.inventory = getSeedInventory();
+      appState.loans = getSeedLoans();
+      appState.transactions = getSeedTransactions();
+      appState.cart = [];
+      saveStateToStorage();
+      refreshAllViews();
+      showToast('Demo data restored to default Tupande CRO baseline.', 'success');
+    }
+
+    /*************************************************************************
+     * 3. UTILITY HELPERS (FORMATTING, AUDIO BEEP, TOASTS)
+     *************************************************************************/
+    function formatKes(amount) {
+      return 'KES ' + Number(amount || 0).toLocaleString('en-KE', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      });
+    }
+
+    function formatDateTime(isoString) {
+      const d = new Date(isoString);
+      return d.toLocaleString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function isToday(isoString) {
+      const d = new Date(isoString);
+      const now = new Date();
+      return d.getDate() === now.getDate() &&
+             d.getMonth() === now.getMonth() &&
+             d.getFullYear() === now.getFullYear();
+    }
+
+    function generateId(prefix) {
+      const year = new Date().getFullYear();
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      return `${prefix}-${year}-${rand}`;
+    }
+
+    // Lightweight Web Audio API scanner beep (zero external URLs)
+    function playBeep(success = true) {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = success ? 880 : 260;
+        gain.gain.setValueAtTime(0.06, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.12);
+      } catch (e) {
+        // Ignore audio restrictions if user hasn't interacted yet
+      }
+    }
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const styles = {
+        success: 'bg-[#1B5E20] text-white border-emerald-700',
+        warning: 'bg-amber-600 text-white border-amber-700',
+        error: 'bg-rose-600 text-white border-rose-700'
+      };
+      toast.className = `animate-toast pointer-events-auto px-4 py-3 rounded-xl shadow-lg border text-xs font-semibold flex items-center justify-between gap-3 ${styles[type] || styles.success}`;
+      toast.innerHTML = `
+        <span>${message}</span>
+        <button type="button" onclick="this.parentElement.remove()" class="opacity-80 hover:opacity-100 font-bold cursor-pointer">✕</button>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => {
+        if (toast.parentElement) toast.remove();
+      }, 3800);
+    }
+
+    function updateLiveClock() {
+      const el = document.getElementById('live-clock');
+      if (!el) return;
+      const now = new Date();
+      el.textContent = now.toLocaleString('en-GB', {
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }) + ' EAT';
+    }
+
+    /*************************************************************************
+     * 4. NAVIGATION & HEADER KPI UPDATES
+     *************************************************************************/
+    function switchTab(tabId) {
+      appState.activeTab = tabId;
+      document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.add('hidden');
+      });
+      const target = document.getElementById(`tab-${tabId}`);
+      if (target) target.classList.remove('hidden');
+
+      document.querySelectorAll('.nav-tab').forEach(btn => {
+        const isSelected = btn.getAttribute('data-tab') === tabId;
+        if (isSelected) {
+          btn.className = 'nav-tab flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition cursor-pointer bg-white text-[#1B5E20] shadow-sm';
+        } else {
+          btn.className = 'nav-tab flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition cursor-pointer text-emerald-100 hover:bg-white/10';
+        }
+      });
+
+      refreshAllViews();
+    }
+
+    function navigateToLowStock() {
+      switchTab('inventory');
+      setInventoryFilter('LOW');
+    }
+
+    function updateHeaderKpis() {
+      const lowStockCount = appState.inventory.filter(i => i.stock <= i.parLevel).length;
+      const activeLoansCount = appState.loans.filter(l => l.status === 'ACTIVE').length;
+      const todayTxnsCount = appState.transactions.filter(t => isToday(t.timestamp)).length;
+
+      document.getElementById('kpi-low-stock').textContent = lowStockCount;
+      document.getElementById('kpi-active-loans').textContent = activeLoansCount;
+      document.getElementById('kpi-today-txns').textContent = todayTxnsCount;
+      document.getElementById('nav-custody-badge').textContent = activeLoansCount;
+    }
+
+    function refreshAllViews() {
+      updateHeaderKpis();
+      renderPosCategoryPills();
+      renderPosCatalog();
+      renderPosCart();
+      renderInventoryStats();
+      renderInventoryTable();
+      renderCustodyTable();
+      renderAuditTable();
+    }
+
+    /*************************************************************************
+     * 5. POS TERMINAL LOGIC (CATALOG, QUICK SCAN, CART & CHECKOUT)
+     *************************************************************************/
+    function setPosMode(mode) {
+      appState.posMode = mode;
+      const issueBtn = document.getElementById('mode-btn-issue');
+      const restockBtn = document.getElementById('mode-btn-restock');
+      const recLabel = document.getElementById('slip-recipient-label');
+      const recInput = document.getElementById('slip-recipient');
+      const refInput = document.getElementById('slip-reference');
+
+      if (mode === 'ISSUE') {
+        issueBtn.className = 'py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer bg-[#1B5E20] text-white shadow-sm';
+        restockBtn.className = 'py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer text-slate-700 hover:text-slate-900';
+        recLabel.innerHTML = 'Recipient / Staff Member Name <span class="text-rose-500">*</span>';
+        recInput.placeholder = 'e.g. Wanjiku Kamau or Visitor Name';
+        refInput.placeholder = 'e.g. Desk B4 / Onboarding';
+      } else {
+        restockBtn.className = 'py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer bg-amber-600 text-white shadow-sm';
+        issueBtn.className = 'py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer text-slate-700 hover:text-slate-900';
+        recLabel.innerHTML = 'Supplier / Vendor Name <span class="text-rose-500">*</span>';
+        recInput.placeholder = 'e.g. Text Book Centre / Safaricom';
+        refInput.placeholder = 'e.g. LPO-2026-104 / eTIMS Inv';
+      }
+
+      // Clamp cart quantities if switching back to ISSUE mode
+      if (mode === 'ISSUE') {
+        appState.cart = appState.cart.reduce((acc, cItem) => {
+          const invItem = appState.inventory.find(i => i.id === cItem.itemId);
+          if (invItem && invItem.stock > 0) {
+            cItem.qty = Math.min(cItem.qty, invItem.stock);
+            acc.push(cItem);
+          }
+          return acc;
+        }, []);
+      }
+
+      renderPosCatalog();
+      renderPosCart();
+    }
+
+    function renderPosCategoryPills() {
+      const container = document.getElementById('pos-category-pills');
+      container.innerHTML = CATEGORIES.map(cat => {
+        const count = cat === 'All'
+          ? appState.inventory.length
+          : appState.inventory.filter(i => i.category === cat).length;
+        const active = appState.posCategory === cat;
+        const cls = active
+          ? 'bg-[#1B5E20] text-white border-[#1B5E20]'
+          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100';
+        return `
+          <button type="button" onclick="selectPosCategory('${cat}')"
+            class="px-3 py-1.5 rounded-xl border text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${cls}">
+            <span>${cat}</span>
+            <span class="text-[10px] px-1.5 py-0.2 rounded-full ${active ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-600'} tabular-nums">${count}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectPosCategory(category) {
+      appState.posCategory = category;
+      renderPosCategoryPills();
+      renderPosCatalog();
+    }
+
+    function handleQuickSkuScan(event) {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      const input = event.target;
+      const code = input.value.trim().toUpperCase();
+      if (!code) return;
+
+      const match = appState.inventory.find(i => i.sku.toUpperCase() === code);
+      if (!match) {
+        playBeep(false);
+        showToast(`No catalog item found with SKU "${code}".`, 'error');
+        input.select();
+        return;
+      }
+
+      const added = addItemToCart(match.id);
+      if (added) {
+        playBeep(true);
+        input.value = '';
+      } else {
+        playBeep(false);
+      }
+    }
+
+    function renderPosCatalog() {
+      const grid = document.getElementById('pos-catalog-grid');
+      const query = (document.getElementById('pos-search').value || '').trim().toLowerCase();
+
+      const filtered = appState.inventory.filter(item => {
+        const matchesCat = appState.posCategory === 'All' || item.category === appState.posCategory;
+        const matchesQuery = !query ||
+          item.name.toLowerCase().includes(query) ||
+          item.sku.toLowerCase().includes(query) ||
+          item.category.toLowerCase().includes(query);
+        return matchesCat && matchesQuery;
+      });
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full bg-white rounded-2xl border border-slate-200 p-8 text-center">
+            <p class="text-sm font-semibold text-slate-700">No matching items found</p>
+            <p class="text-xs text-slate-500 mt-1">Try adjusting your category filter or search term.</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = filtered.map(item => {
+        const inCart = appState.cart.find(c => c.itemId === item.id);
+        const isOut = item.stock === 0;
+        const isLow = item.stock > 0 && item.stock <= item.parLevel;
+
+        let statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-[#1B5E20]">In Stock</span>`;
+        if (isOut) {
+          statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">Out of Stock</span>`;
+        } else if (isLow) {
+          statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">Low Stock</span>`;
+        }
+
+        const disabledInIssue = appState.posMode === 'ISSUE' && isOut;
+        const cardBorder = inCart
+          ? 'border-[#2E7D32] ring-2 ring-[#2E7D32]/20 bg-emerald-50/20'
+          : 'border-slate-200 hover:border-[#2E7D32]/60 bg-white';
+
+        return `
+          <div onclick="addItemToCart('${item.id}')"
+            class="rounded-2xl border p-3.5 shadow-xs transition flex flex-col justify-between select-none ${cardBorder} ${disabledInIssue ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}">
+            <div>
+              <div class="flex items-center justify-between gap-1.5 mb-2">
+                <span class="font-mono text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">${item.sku}</span>
+                <div class="flex items-center gap-1">
+                  ${item.isFixedAsset ? `<span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">ASSET</span>` : ''}
+                  ${statusBadge}
+                </div>
+              </div>
+
+              <h3 class="text-xs sm:text-sm font-bold text-slate-900 leading-snug line-clamp-2">${item.name}</h3>
+              <p class="text-[11px] text-slate-500 mt-1">${item.category}</p>
+            </div>
+
+            <div class="mt-3 pt-2.5 border-t border-slate-100 flex items-end justify-between">
+              <div>
+                <span class="block text-[10px] text-slate-400 font-medium">Unit Cost</span>
+                <span class="text-xs font-extrabold text-slate-800 tabular-nums">${formatKes(item.unitCost)}</span>
+              </div>
+
+              <div class="text-right">
+                ${inCart ? `<span class="inline-block mb-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#1B5E20] text-white tabular-nums">In Slip: ${inCart.qty}</span>` : ''}
+                <span class="block text-xs font-bold tabular-nums ${isOut ? 'text-rose-600' : isLow ? 'text-amber-700' : 'text-slate-700'}">
+                  ${item.stock} ${item.unit}s
+                </span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function addItemToCart(itemId) {
+      const item = appState.inventory.find(i => i.id === itemId);
+      if (!item) return false;
+
+      const existing = appState.cart.find(c => c.itemId === itemId);
+
+      if (appState.posMode === 'ISSUE') {
+        if (item.stock <= 0) {
+          showToast(`"${item.name}" is currently out of stock.`, 'warning');
+          return false;
+        }
+        const nextQty = existing ? existing.qty + 1 : 1;
+        if (nextQty > item.stock) {
+          showToast(`Cannot issue more than available stock (${item.stock} ${item.unit}s).`, 'warning');
+          return false;
+        }
+      }
+
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        const defaultTag = item.isFixedAsset ? `TAG-KKG-${Math.floor(1000 + Math.random() * 8999)}` : '';
+        appState.cart.push({
+          itemId: item.id,
+          sku: item.sku,
+          name: item.name,
+          unit: item.unit,
+          unitCost: item.unitCost,
+          qty: 1,
+          isFixedAsset: item.isFixedAsset,
+          assetTag: defaultTag
+        });
+      }
+
+      renderPosCatalog();
+      renderPosCart();
+      return true;
+    }
+
+    function updateCartQty(itemId, delta) {
+      const idx = appState.cart.findIndex(c => c.itemId === itemId);
+      if (idx === -1) return;
+
+      const cartItem = appState.cart[idx];
+      const invItem = appState.inventory.find(i => i.id === itemId);
+      const newQty = cartItem.qty + delta;
+
+      if (newQty <= 0) {
+        appState.cart.splice(idx, 1);
+      } else {
+        if (appState.posMode === 'ISSUE' && invItem && newQty > invItem.stock) {
+          showToast(`Maximum available stock is ${invItem.stock} ${invItem.unit}s.`, 'warning');
+          return;
+        }
+        cartItem.qty = newQty;
+      }
+
+      renderPosCatalog();
+      renderPosCart();
+    }
+
+    function updateCartAssetTag(itemId, tagValue) {
+      const cartItem = appState.cart.find(c => c.itemId === itemId);
+      if (cartItem) {
+        cartItem.assetTag = tagValue;
+      }
+    }
+
+    function clearCart() {
+      appState.cart = [];
+      renderPosCatalog();
+      renderPosCart();
+    }
+
+    function renderPosCart() {
+      const container = document.getElementById('pos-cart-list');
+      const unitsEl = document.getElementById('cart-total-units');
+      const totalKesEl = document.getElementById('cart-total-kes');
+
+      if (appState.cart.length === 0) {
+        container.innerHTML = `
+          <div class="py-10 text-center">
+            <div class="w-11 h-11 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center mb-2.5">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <p class="text-xs font-semibold text-slate-600">Active slip is empty</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">Click items on the left or scan a SKU barcode to add.</p>
+          </div>
+        `;
+        unitsEl.textContent = '0 items (0 units)';
+        totalKesEl.textContent = 'KES 0';
+        return;
+      }
+
+      let totalUnits = 0;
+      let totalValue = 0;
+
+      container.innerHTML = appState.cart.map(item => {
+        const lineTotal = item.qty * item.unitCost;
+        totalUnits += item.qty;
+        totalValue += lineTotal;
+
+        const showTagInput = item.isFixedAsset && appState.posMode === 'ISSUE';
+
+        return `
+          <div class="py-3 first:pt-0 last:pb-0 space-y-2">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-mono text-[10px] font-semibold text-slate-500">${item.sku}</span>
+                  ${item.isFixedAsset ? `<span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 rounded">FIXED ASSET</span>` : ''}
+                </div>
+                <p class="text-xs font-bold text-slate-900 truncate mt-0.5">${item.name}</p>
+                <p class="text-[11px] text-slate-500 tabular-nums">${formatKes(item.unitCost)} × ${item.qty} = <strong class="text-slate-800">${formatKes(lineTotal)}</strong></p>
+              </div>
+
+              <!-- Qty Stepper -->
+              <div class="flex items-center gap-1 bg-slate-100 rounded-xl p-1 border border-slate-200 shrink-0">
+                <button type="button" onclick="updateCartQty('${item.itemId}', -1)"
+                  class="w-6 h-6 rounded-lg bg-white hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shadow-2xs cursor-pointer">
+                  −
+                </button>
+                <span class="w-7 text-center text-xs font-extrabold text-slate-900 tabular-nums">${item.qty}</span>
+                <button type="button" onclick="updateCartQty('${item.itemId}', 1)"
+                  class="w-6 h-6 rounded-lg bg-white hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shadow-2xs cursor-pointer">
+                  +
+                </button>
+              </div>
+            </div>
+
+            ${showTagInput ? `
+              <div class="flex items-center gap-2 bg-indigo-50/70 border border-indigo-200/80 rounded-lg px-2.5 py-1.5">
+                <label class="text-[10px] font-bold text-indigo-900 whitespace-nowrap">Asset Tag / Serial:</label>
+                <input type="text" value="${item.assetTag || ''}"
+                  oninput="updateCartAssetTag('${item.itemId}', this.value)"
+                  placeholder="e.g. TAG-KKG-0512"
+                  class="w-full text-[11px] font-mono uppercase bg-white border border-indigo-200 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-600" />
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+
+      unitsEl.textContent = `${appState.cart.length} item${appState.cart.length > 1 ? 's' : ''} (${totalUnits} unit${totalUnits > 1 ? 's' : ''})`;
+      totalKesEl.textContent = formatKes(totalValue);
+    }
+
+    function completePosTransaction() {
+      if (appState.cart.length === 0) {
+        showToast('Please add at least one item to the slip first.', 'warning');
+        return;
+      }
+
+      const recipient = document.getElementById('slip-recipient').value.trim();
+      const department = document.getElementById('slip-department').value;
+      const reference = document.getElementById('slip-reference').value.trim() || 'Standard Desk Log';
+
+      if (!recipient) {
+        showToast(
+          appState.posMode === 'ISSUE'
+            ? 'Please enter the Recipient / Staff Member Name.'
+            : 'Please enter the Supplier / Vendor Name.',
+          'warning'
+        );
+        document.getElementById('slip-recipient').focus();
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const txnId = generateId('TXN');
+      let totalQty = 0;
+      let totalValue = 0;
+
+      // Update inventory stock and record fixed asset loans if issuing
+      appState.cart.forEach(cItem => {
+        const invItem = appState.inventory.find(i => i.id === cItem.itemId);
+        if (!invItem) return;
+
+        if (appState.posMode === 'ISSUE') {
+          invItem.stock = Math.max(0, invItem.stock - cItem.qty);
+
+          // If Fixed Asset, record chain-of-custody entries (one per unit issued)
+          if (invItem.isFixedAsset) {
+            for (let u = 0; u < cItem.qty; u++) {
+              const tagSuffix = cItem.qty > 1 ? `-${u + 1}` : '';
+              appState.loans.unshift({
+                loanId: generateId('LN'),
+                itemId: invItem.id,
+                sku: invItem.sku,
+                assetName: invItem.name,
+                assetTag: (cItem.assetTag || `TAG-KKG-${Math.floor(1000 + Math.random() * 8999)}`) + tagSuffix,
+                recipient,
+                department,
+                issuedAt: nowIso,
+                reference,
+                unitCost: invItem.unitCost,
+                status: 'ACTIVE',
+                returnedAt: null,
+                returnNote: null
+              });
+            }
+          }
+        } else {
+          // RESTOCK
+          invItem.stock += cItem.qty;
+        }
+
+        totalQty += cItem.qty;
+        totalValue += cItem.qty * cItem.unitCost;
+      });
+
+      const txnRecord = {
+        txnId,
+        timestamp: nowIso,
+        mode: appState.posMode,
+        recipient,
+        department,
+        reference,
+        items: appState.cart.map(c => ({ ...c })),
+        totalQty,
+        totalValue
+      };
+
+      appState.transactions.unshift(txnRecord);
+
+      // Reset form & cart
+      appState.cart = [];
+      document.getElementById('slip-recipient').value = '';
+      document.getElementById('slip-reference').value = '';
+
+      saveStateToStorage();
+      refreshAllViews();
+      openReceiptModal(txnRecord);
+      showToast(`Transaction ${txnId} completed & logged!`, 'success');
+    }
+
+    /*************************************************************************
+     * 6. PRINTABLE AUDIT-READY RECEIPT MODAL
+     *************************************************************************/
+    function openReceiptModal(txn) {
+      const isIssue = txn.mode === 'ISSUE';
+      const isReturn = txn.mode === 'ASSET_RETURN';
+
+      const badge = document.getElementById('rcpt-mode-badge');
+      if (isIssue) {
+        badge.textContent = 'ISSUANCE / CHECK-OUT (-)';
+        badge.className = 'inline-block px-2.5 py-1 rounded-md text-xs font-extrabold uppercase tracking-wider bg-emerald-100 text-[#1B5E20]';
+      } else if (isReturn) {
+        badge.textContent = 'FIXED ASSET RETURN (+)';
+        badge.className = 'inline-block px-2.5 py-1 rounded-md text-xs font-extrabold uppercase tracking-wider bg-indigo-100 text-indigo-800';
+      } else {
+        badge.textContent = 'STOCK RESTOCK RECEIPT (+)';
+        badge.className = 'inline-block px-2.5 py-1 rounded-md text-xs font-extrabold uppercase tracking-wider bg-amber-100 text-amber-800';
+      }
+
+      document.getElementById('rcpt-txn-id').textContent = txn.txnId;
+      document.getElementById('rcpt-date').textContent = formatDateTime(txn.timestamp);
+      document.getElementById('rcpt-recipient').textContent = txn.recipient;
+      document.getElementById('rcpt-department').textContent = txn.department;
+      document.getElementById('rcpt-reference').textContent = txn.reference || '—';
+
+      const tbody = document.getElementById('rcpt-items-body');
+      tbody.innerHTML = txn.items.map(item => `
+        <tr>
+          <td class="py-2.5 px-3 font-mono text-[11px] font-semibold text-slate-700">${item.sku}</td>
+          <td class="py-2.5 px-3">
+            <span class="font-semibold text-slate-900">${item.name}</span>
+            ${item.assetTag ? `<span class="block font-mono text-[10px] text-indigo-700">Asset Tag: ${item.assetTag}</span>` : ''}
+          </td>
+          <td class="py-2.5 px-3 text-center tabular-nums font-semibold">${item.qty} ${item.unit || ''}</td>
+          <td class="py-2.5 px-3 text-right tabular-nums text-slate-600">${formatKes(item.unitCost)}</td>
+          <td class="py-2.5 px-3 text-right tabular-nums font-bold text-slate-900">${formatKes(item.qty * item.unitCost)}</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('rcpt-total-qty').textContent = txn.totalQty;
+      document.getElementById('rcpt-total-kes').textContent = formatKes(txn.totalValue);
+
+      document.getElementById('rcpt-sign-recipient').textContent = isIssue
+        ? `Received By (${txn.recipient})`
+        : isReturn
+        ? `Returned By (${txn.recipient})`
+        : `Delivered By (${txn.recipient})`;
+
+      document.getElementById('receipt-modal').classList.remove('hidden');
+    }
+
+    function closeReceiptModal() {
+      document.getElementById('receipt-modal').classList.add('hidden');
+    }
+
+    function viewTransactionReceipt(txnId) {
+      const txn = appState.transactions.find(t => t.txnId === txnId);
+      if (txn) openReceiptModal(txn);
+    }
+
+    /*************************************************************************
+     * 7. INVENTORY & STOCK TAB LOGIC
+     *************************************************************************/
+    function setInventoryFilter(filter) {
+      appState.inventoryFilter = filter;
+      const allBtn = document.getElementById('inv-filter-all');
+      const lowBtn = document.getElementById('inv-filter-low');
+
+      if (filter === 'ALL') {
+        allBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-900 shadow-sm transition cursor-pointer';
+        lowBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition cursor-pointer';
+      } else {
+        lowBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-600 text-white shadow-sm transition cursor-pointer';
+        allBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition cursor-pointer';
+      }
+      renderInventoryTable();
+    }
+
+    function renderInventoryStats() {
+      const totalSkus = appState.inventory.length;
+      const totalVal = appState.inventory.reduce((sum, i) => sum + (i.stock * i.unitCost), 0);
+      const lowCount = appState.inventory.filter(i => i.stock <= i.parLevel).length;
+      const outCount = appState.inventory.filter(i => i.stock === 0).length;
+
+      document.getElementById('inv-stat-skus').textContent = totalSkus;
+      document.getElementById('inv-stat-value').textContent = formatKes(totalVal);
+      document.getElementById('inv-stat-low').textContent = lowCount;
+      document.getElementById('inv-stat-out').textContent = outCount;
+    }
+
+    function renderInventoryTable() {
+      const tbody = document.getElementById('inventory-table-body');
+      const query = (document.getElementById('inv-search').value || '').trim().toLowerCase();
+
+      const items = appState.inventory.filter(item => {
+        const matchesFilter = appState.inventoryFilter === 'ALL' || item.stock <= item.parLevel;
+        const matchesQuery = !query ||
+          item.sku.toLowerCase().includes(query) ||
+          item.name.toLowerCase().includes(query) ||
+          item.category.toLowerCase().includes(query);
+        return matchesFilter && matchesQuery;
+      });
+
+      if (items.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="py-10 text-center text-xs text-slate-500">
+              No inventory items match the current filter criteria.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = items.map(item => {
+        const isOut = item.stock === 0;
+        const isLow = item.stock > 0 && item.stock <= item.parLevel;
+        const ratio = item.parLevel > 0 ? Math.min(100, Math.round((item.stock / (item.parLevel * 2)) * 100)) : 100;
+        const barColor = isOut ? 'bg-rose-500' : isLow ? 'bg-amber-500' : 'bg-[#2E7D32]';
+
+        return `
+          <tr class="hover:bg-slate-50/80 transition">
+            <td class="py-3 px-4 whitespace-nowrap">
+              <span class="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">${item.sku}</span>
+              ${item.isFixedAsset ? `<span class="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">Asset</span>` : ''}
+            </td>
+            <td class="py-3 px-4 font-semibold text-slate-900">${item.name}</td>
+            <td class="py-3 px-4 text-xs text-slate-600 whitespace-nowrap">${item.category}</td>
+            <td class="py-3 px-4 whitespace-nowrap">
+              <div class="flex items-center gap-2.5">
+                <div class="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
+                  <div class="h-full ${barColor} rounded-full" style="width: ${ratio}%"></div>
+                </div>
+                <span class="text-xs font-bold tabular-nums ${isOut ? 'text-rose-600' : isLow ? 'text-amber-700' : 'text-slate-800'}">
+                  ${item.stock} / Par ${item.parLevel} ${item.unit}s
+                </span>
+              </div>
+            </td>
+            <td class="py-3 px-4 text-right text-xs tabular-nums text-slate-600 whitespace-nowrap">${formatKes(item.unitCost)}</td>
+            <td class="py-3 px-4 text-right text-xs font-bold tabular-nums text-slate-900 whitespace-nowrap">${formatKes(item.stock * item.unitCost)}</td>
+            <td class="py-3 px-4 text-right whitespace-nowrap">
+              <button type="button" onclick="openQuickRestockModal('${item.id}')"
+                class="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-[#1B5E20] text-[#1B5E20] hover:text-white border border-emerald-200 text-xs font-bold transition cursor-pointer">
+                + Restock
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function openAddItemModal() {
+      document.getElementById('add-item-form').reset();
+      const nextNum = String(appState.inventory.length + 1).padStart(3, '0');
+      document.getElementById('new-item-sku').value = `TPD-OPS-${nextNum}`;
+      document.getElementById('add-item-modal').classList.remove('hidden');
+    }
+
+    function closeAddItemModal() {
+      document.getElementById('add-item-modal').classList.add('hidden');
+    }
+
+    function handleAddNewItem(event) {
+      event.preventDefault();
+      const sku = document.getElementById('new-item-sku').value.trim().toUpperCase();
+      const category = document.getElementById('new-item-category').value;
+      const name = document.getElementById('new-item-name').value.trim();
+      const unit = document.getElementById('new-item-unit').value.trim() || 'Unit';
+      const stock = parseInt(document.getElementById('new-item-stock').value, 10) || 0;
+      const parLevel = parseInt(document.getElementById('new-item-par').value, 10) || 0;
+      const unitCost = parseFloat(document.getElementById('new-item-cost').value) || 0;
+      const isFixedAsset = document.getElementById('new-item-asset').checked;
+
+      if (appState.inventory.some(i => i.sku.toUpperCase() === sku)) {
+        showToast(`SKU "${sku}" already exists in the catalog.`, 'error');
+        return;
+      }
+
+      const newItem = {
+        id: 'itm-' + Date.now(),
+        sku,
+        name,
+        category,
+        unit,
+        stock,
+        parLevel,
+        unitCost,
+        isFixedAsset
+      };
+
+      appState.inventory.unshift(newItem);
+      saveStateToStorage();
+      closeAddItemModal();
+      refreshAllViews();
+      showToast(`Added "${name}" (${sku}) to inventory catalog.`, 'success');
+    }
+
+    function openQuickRestockModal(itemId) {
+      const item = appState.inventory.find(i => i.id === itemId);
+      if (!item) return;
+      document.getElementById('qr-item-id').value = item.id;
+      document.getElementById('qr-item-sku').textContent = item.sku;
+      document.getElementById('qr-item-name').textContent = item.name;
+      document.getElementById('qr-item-current').textContent = `Current Stock: ${item.stock} ${item.unit}s (Par Level: ${item.parLevel})`;
+      document.getElementById('qr-qty').value = Math.max(5, item.parLevel * 2 - item.stock);
+      document.getElementById('qr-ref').value = '';
+      document.getElementById('quick-restock-modal').classList.remove('hidden');
+    }
+
+    function closeQuickRestockModal() {
+      document.getElementById('quick-restock-modal').classList.add('hidden');
+    }
+
+    function submitQuickRestock(event) {
+      event.preventDefault();
+      const itemId = document.getElementById('qr-item-id').value;
+      const qty = parseInt(document.getElementById('qr-qty').value, 10);
+      const vendor = document.getElementById('qr-vendor').value.trim() || 'Approved Vendor';
+      const ref = document.getElementById('qr-ref').value.trim() || 'Direct Inventory Replenishment';
+
+      const item = appState.inventory.find(i => i.id === itemId);
+      if (!item || !qty || qty <= 0) return;
+
+      item.stock += qty;
+      const txnId = generateId('TXN');
+      const txnRecord = {
+        txnId,
+        timestamp: new Date().toISOString(),
+        mode: 'RESTOCK',
+        recipient: vendor,
+        department: 'Corporate Ops (CRO)',
+        reference: ref,
+        items: [{
+          sku: item.sku,
+          name: item.name,
+          unit: item.unit,
+          qty,
+          unitCost: item.unitCost,
+          assetTag: '',
+          isFixedAsset: item.isFixedAsset
+        }],
+        totalQty: qty,
+        totalValue: qty * item.unitCost
+      };
+
+      appState.transactions.unshift(txnRecord);
+      saveStateToStorage();
+      closeQuickRestockModal();
+      refreshAllViews();
+      showToast(`Restocked +${qty} ${item.unit}s of ${item.sku}.`, 'success');
+    }
+
+    /*************************************************************************
+     * 8. ASSET CUSTODY TAB LOGIC (CHECK-OUTS & RETURNS)
+     *************************************************************************/
+    let pendingReturnLoanId = null;
+
+    function renderCustodyTable() {
+      const activeBody = document.getElementById('custody-active-body');
+      const returnedBody = document.getElementById('custody-returned-body');
+      const query = (document.getElementById('custody-search').value || '').trim().toLowerCase();
+
+      const activeLoans = appState.loans.filter(l => l.status === 'ACTIVE');
+      const returnedLoans = appState.loans.filter(l => l.status === 'RETURNED');
+
+      const totalDeployedVal = activeLoans.reduce((sum, l) => sum + (l.unitCost || 0), 0);
+      document.getElementById('custody-active-count').textContent = activeLoans.length;
+      document.getElementById('custody-active-value').textContent = formatKes(totalDeployedVal);
+
+      const filteredActive = activeLoans.filter(l =>
+        !query ||
+        l.recipient.toLowerCase().includes(query) ||
+        l.assetName.toLowerCase().includes(query) ||
+        l.sku.toLowerCase().includes(query) ||
+        (l.assetTag || '').toLowerCase().includes(query) ||
+        l.department.toLowerCase().includes(query)
+      );
+
+      if (filteredActive.length === 0) {
+        activeBody.innerHTML = `
+          <tr>
+            <td colspan="7" class="py-8 text-center text-xs text-slate-500">
+              No active fixed asset loans match your filter.
+            </td>
+          </tr>
+        `;
+      } else {
+        activeBody.innerHTML = filteredActive.map(loan => `
+          <tr class="hover:bg-slate-50/80 transition">
+            <td class="py-3 px-4 whitespace-nowrap">
+              <span class="block font-mono text-xs font-bold text-indigo-700">${loan.assetTag || 'NO-TAG'}</span>
+              <span class="block font-mono text-[10px] text-slate-400">${loan.loanId}</span>
+            </td>
+            <td class="py-3 px-4">
+              <span class="block font-bold text-slate-900">${loan.assetName}</span>
+              <span class="font-mono text-[11px] text-slate-500">${loan.sku}</span>
+            </td>
+            <td class="py-3 px-4 font-semibold text-slate-900 whitespace-nowrap">${loan.recipient}</td>
+            <td class="py-3 px-4 whitespace-nowrap">
+              <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">${loan.department}</span>
+            </td>
+            <td class="py-3 px-4 text-xs text-slate-600 tabular-nums whitespace-nowrap">${formatDateTime(loan.issuedAt)}</td>
+            <td class="py-3 px-4 text-xs text-slate-600">${loan.reference || '—'}</td>
+            <td class="py-3 px-4 text-right whitespace-nowrap">
+              <button type="button" onclick="openConfirmModal('return', '${loan.loanId}')"
+                class="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-600 text-amber-800 hover:text-white border border-amber-300 text-xs font-bold transition cursor-pointer">
+                Mark Returned
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      if (returnedLoans.length === 0) {
+        returnedBody.innerHTML = `
+          <tr>
+            <td colspan="5" class="py-6 text-center text-xs text-slate-400">
+              No returned asset clearances logged yet.
+            </td>
+          </tr>
+        `;
+      } else {
+        returnedBody.innerHTML = returnedLoans.slice(0, 15).map(loan => `
+          <tr>
+            <td class="py-2.5 px-4 font-mono whitespace-nowrap">${loan.assetTag} <span class="text-slate-400">(${loan.loanId})</span></td>
+            <td class="py-2.5 px-4 font-semibold text-slate-800">${loan.assetName}</td>
+            <td class="py-2.5 px-4">${loan.recipient} (${loan.department})</td>
+            <td class="py-2.5 px-4 tabular-nums whitespace-nowrap">${formatDateTime(loan.issuedAt)}</td>
+            <td class="py-2.5 px-4 tabular-nums text-emerald-700 font-medium">${formatDateTime(loan.returnedAt)} — ${loan.returnNote || 'Cleared'}</td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    function executeAssetReturn(loanId, conditionNote) {
+      const loan = appState.loans.find(l => l.loanId === loanId);
+      if (!loan || loan.status !== 'ACTIVE') return;
+
+      const nowIso = new Date().toISOString();
+      loan.status = 'RETURNED';
+      loan.returnedAt = nowIso;
+      loan.returnNote = conditionNote || 'Good working condition';
+
+      // Restore +1 to inventory stock
+      const invItem = appState.inventory.find(i => i.id === loan.itemId || i.sku === loan.sku);
+      if (invItem) {
+        invItem.stock += 1;
+      }
+
+      // Log return in Audit Log
+      const txnRecord = {
+        txnId: generateId('TXN'),
+        timestamp: nowIso,
+        mode: 'ASSET_RETURN',
+        recipient: loan.recipient,
+        department: loan.department,
+        reference: `Return ${loan.assetTag} • ${loan.returnNote}`,
+        items: [{
+          sku: loan.sku,
+          name: loan.assetName,
+          unit: 'Unit',
+          qty: 1,
+          unitCost: loan.unitCost || (invItem ? invItem.unitCost : 0),
+          assetTag: loan.assetTag,
+          isFixedAsset: true
+        }],
+        totalQty: 1,
+        totalValue: loan.unitCost || (invItem ? invItem.unitCost : 0)
+      };
+
+      appState.transactions.unshift(txnRecord);
+      saveStateToStorage();
+      refreshAllViews();
+      showToast(`Asset ${loan.assetTag} marked returned & restocked (+1).`, 'success');
+    }
+
+    /*************************************************************************
+     * 9. AUDIT LOG & CSV / JSON EXPORT-IMPORT LOGIC
+     *************************************************************************/
+    function renderAuditTable() {
+      const tbody = document.getElementById('audit-table-body');
+      const query = (document.getElementById('audit-search').value || '').trim().toLowerCase();
+      const modeFilter = document.getElementById('audit-mode-filter').value;
+
+      const filtered = appState.transactions.filter(txn => {
+        const matchesMode = modeFilter === 'ALL' || txn.mode === modeFilter;
+        const itemText = txn.items.map(i => `${i.sku} ${i.name} ${i.assetTag || ''}`).join(' ').toLowerCase();
+        const matchesQuery = !query ||
+          txn.txnId.toLowerCase().includes(query) ||
+          txn.recipient.toLowerCase().includes(query) ||
+          txn.department.toLowerCase().includes(query) ||
+          (txn.reference || '').toLowerCase().includes(query) ||
+          itemText.includes(query);
+        return matchesMode && matchesQuery;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" class="py-10 text-center text-xs text-slate-500">
+              No audit records match your search or mode filter.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(txn => {
+        let modeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-[#1B5E20]">Issuance (-)</span>`;
+        if (txn.mode === 'RESTOCK') {
+          modeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800">Restock (+)</span>`;
+        } else if (txn.mode === 'ASSET_RETURN') {
+          modeBadge = `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800">Asset Return</span>`;
+        }
+
+        const itemsSummary = txn.items.map(i => `${i.qty}× ${i.name}`).join(', ');
+
+        return `
+          <tr class="hover:bg-slate-50/80 transition">
+            <td class="py-3 px-4 font-mono text-xs font-bold text-slate-800 whitespace-nowrap">${txn.txnId}</td>
+            <td class="py-3 px-4 text-xs text-slate-600 tabular-nums whitespace-nowrap">${formatDateTime(txn.timestamp)}</td>
+            <td class="py-3 px-4 whitespace-nowrap">${modeBadge}</td>
+            <td class="py-3 px-4 font-semibold text-slate-900 whitespace-nowrap">${txn.recipient}</td>
+            <td class="py-3 px-4 text-xs text-slate-600 whitespace-nowrap">${txn.department}</td>
+            <td class="py-3 px-4 text-xs text-slate-700 max-w-xs truncate" title="${itemsSummary}">${itemsSummary}</td>
+            <td class="py-3 px-4 text-right text-xs font-bold tabular-nums text-slate-900 whitespace-nowrap">${formatKes(txn.totalValue)}</td>
+            <td class="py-3 px-4 text-right whitespace-nowrap">
+              <button type="button" onclick="viewTransactionReceipt('${txn.txnId}')"
+                class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 transition cursor-pointer">
+                Receipt
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function downloadFile(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    function escapeCsv(val) {
+      const str = String(val ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    }
+
+    function exportReorderCsv() {
+      const lowItems = appState.inventory.filter(i => i.stock <= i.parLevel);
+      if (lowItems.length === 0) {
+        showToast('All catalog items are currently above par level!', 'success');
+        return;
+      }
+
+      const headers = ['SKU', 'Item Name', 'Category', 'Unit', 'Current Stock', 'Par Level', 'Suggested Order Qty', 'Est Unit Cost (KES)', 'Est Reorder Total (KES)'];
+      const rows = lowItems.map(i => {
+        const orderQty = Math.max(1, (i.parLevel * 2) - i.stock);
+        return [
+          i.sku,
+          i.name,
+          i.category,
+          i.unit,
+          i.stock,
+          i.parLevel,
+          orderQty,
+          i.unitCost,
+          orderQty * i.unitCost
+        ].map(escapeCsv).join(',');
+      });
+
+      const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      downloadFile(csv, `Tupande_CRO_Reorder_List_${dateStamp}.csv`, 'text/csv;charset=utf-8;');
+      showToast(`Exported ${lowItems.length} low-stock items to CSV.`, 'success');
+    }
+
+    function exportAuditCsv() {
+      const headers = ['Transaction ID', 'Timestamp', 'Mode', 'Recipient / Vendor', 'Department', 'Reference Note', 'Items Breakdown', 'Total Units', 'Total Value (KES)'];
+      const rows = appState.transactions.map(t => {
+        const breakdown = t.items.map(i => `${i.sku}: ${i.name} (${i.qty} ${i.unit}${i.assetTag ? ' | Tag: ' + i.assetTag : ''})`).join('; ');
+        return [
+          t.txnId,
+          formatDateTime(t.timestamp),
+          t.mode,
+          t.recipient,
+          t.department,
+          t.reference,
+          breakdown,
+          t.totalQty,
+          t.totalValue
+        ].map(escapeCsv).join(',');
+      });
+
+      const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      downloadFile(csv, `Tupande_CRO_Audit_Log_${dateStamp}.csv`, 'text/csv;charset=utf-8;');
+      showToast('Full Audit Log exported to CSV.', 'success');
+    }
+
+    function exportBackupJson() {
+      const payload = {
+        system: 'Tupande CRO — Office Ops & Inventory POS',
+        exportedAt: new Date().toISOString(),
+        inventory: appState.inventory,
+        loans: appState.loans,
+        transactions: appState.transactions
+      };
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      downloadFile(JSON.stringify(payload, null, 2), `Tupande_CRO_POS_Backup_${dateStamp}.json`, 'application/json');
+      showToast('Full JSON data backup downloaded.', 'success');
+    }
+
+    function importBackupJson(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (!Array.isArray(parsed.inventory) || !Array.isArray(parsed.loans) || !Array.isArray(parsed.transactions)) {
+            throw new Error('Invalid backup structure');
+          }
+          appState.inventory = parsed.inventory;
+          appState.loans = parsed.loans;
+          appState.transactions = parsed.transactions;
+          appState.cart = [];
+          saveStateToStorage();
+          refreshAllViews();
+          showToast('Backup restored successfully!', 'success');
+        } catch (err) {
+          showToast('Invalid JSON backup file. Import aborted.', 'error');
+        } finally {
+          event.target.value = '';
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    /*************************************************************************
+     * 10. CUSTOM CONFIRMATION & PUBLISH GUIDE MODALS
+     *************************************************************************/
+    function openConfirmModal(actionType, targetId = null) {
+      const modal = document.getElementById('confirm-modal');
+      const title = document.getElementById('confirm-title');
+      const msg = document.getElementById('confirm-message');
+      const noteWrap = document.getElementById('confirm-note-wrap');
+      const proceedBtn = document.getElementById('confirm-proceed-btn');
+
+      if (actionType === 'reset') {
+        title.textContent = 'Reset Demo Data?';
+        msg.textContent = 'This will restore the default Tupande CRO inventory catalog, active asset loans, and sample audit log entries. Any unsaved transactions will be overwritten.';
+        noteWrap.classList.add('hidden');
+        proceedBtn.className = 'px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm cursor-pointer';
+        proceedBtn.textContent = 'Yes, Reset Demo Data';
+        proceedBtn.onclick = () => {
+          closeConfirmModal();
+          resetDemoData();
+        };
+      } else if (actionType === 'return') {
+        const loan = appState.loans.find(l => l.loanId === targetId);
+        if (!loan) return;
+        title.textContent = `Check In Returned Asset (${loan.assetTag})`;
+        msg.textContent = `Confirm return of "${loan.assetName}" from ${loan.recipient} (${loan.department}). This will add +1 unit back to available stock.`;
+        noteWrap.classList.remove('hidden');
+        document.getElementById('confirm-note-input').value = 'Good working condition, accessories verified';
+        proceedBtn.className = 'px-4 py-2 rounded-xl bg-[#1B5E20] hover:bg-[#2E7D32] text-white text-xs font-bold shadow-sm cursor-pointer';
+        proceedBtn.textContent = 'Confirm Return';
+        proceedBtn.onclick = () => {
+          const note = document.getElementById('confirm-note-input').value.trim();
+          closeConfirmModal();
+          executeAssetReturn(targetId, note);
+        };
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('confirm-modal').classList.add('hidden');
+    }
+
+    function openPublishModal() {
+      document.getElementById('publish-modal').classList.remove('hidden');
+    }
+
+    function closePublishModal() {
+      document.getElementById('publish-modal').classList.add('hidden');
+    }
+
+    /*************************************************************************
+     * 11. BOOTSTRAP ON WINDOW LOAD
+     *************************************************************************/
+    window.addEventListener('DOMContentLoaded', () => {
+      loadStateFromStorage();
+      updateLiveClock();
+      setInterval(updateLiveClock, 1000);
+      refreshAllViews();
+    });
+  </script>
+</body>
+</html>
